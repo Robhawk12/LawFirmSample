@@ -283,11 +283,11 @@ def main():
             # Sample queries
             st.markdown("### Sample Queries")
             st.markdown("""
-            - How many arbitrations has Arbitrator John Smith had?
-            - How many times has Arbitrator Jane Doe ruled for the complainant?
-            - What was the average award given by Arbitrator Robert Johnson?
-            - List the names of all arbitrations handled by Arbitrator Mary Williams.
-            - How many times has Arbitrator David Brown ruled for the consumer against Coinbase?
+            - How many arbitrations has Arbitrator John L. Smith had?
+            - How many times has Arbitrator Jane D. Brown ruled for the complainant?
+            - What was the average award given by Arbitrator Robert T. Williams?
+            - List the names of all arbitrations handled by Arbitrator Maria A. Johnson.
+            - How many times has Arbitrator David M. Taylor ruled for the consumer against AT&T?
             """)
 
 if __name__ == "__main__":
