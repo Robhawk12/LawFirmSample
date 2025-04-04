@@ -48,8 +48,11 @@ def filter_dataframe(
     
     if date_range and len(date_range) == 2 and 'Date_Filed' in filtered_df.columns:
         start_date, end_date = date_range
-        filtered_df = filtered_df[(filtered_df['Date_Filed'] >= start_date) & 
-                                  (filtered_df['Date_Filed'] <= end_date)]
+        # Convert Python date objects to pandas datetime64 for comparison
+        start_date_pd = pd.to_datetime(start_date)
+        end_date_pd = pd.to_datetime(end_date)
+        filtered_df = filtered_df[(filtered_df['Date_Filed'] >= start_date_pd) & 
+                                  (filtered_df['Date_Filed'] <= end_date_pd)]
     
     return filtered_df
 
@@ -103,13 +106,14 @@ def calculate_date_diff(
     if start_date is None or end_date is None or pd.isna(start_date) or pd.isna(end_date):
         return None
     
-    if isinstance(start_date, datetime) and isinstance(end_date, datetime):
-        return (end_date - start_date).days
+    # Convert to pandas datetime objects for consistent handling
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
     
-    if isinstance(start_date, date) and isinstance(end_date, date):
-        return (end_date - start_date).days
+    # Calculate difference in days
+    diff = (end_dt - start_dt).days
     
-    return None
+    return diff
 
 def get_top_items(data: Dict[str, int], n: int = 10) -> Dict[str, int]:
     """

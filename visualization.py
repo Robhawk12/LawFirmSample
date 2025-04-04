@@ -100,7 +100,7 @@ def create_visualizations(data: pd.DataFrame) -> None:
     
     if 'Date_Filed' in data.columns and not data['Date_Filed'].isna().all():
         # Group by date filed and count cases
-        timeline_data = data.groupby(pd.Grouper(key='Date_Filed', freq='M')).size().reset_index()
+        timeline_data = data.groupby(pd.Grouper(key='Date_Filed', freq='ME')).size().reset_index()
         timeline_data.columns = ['Date', 'Count']
         
         fig = px.line(
