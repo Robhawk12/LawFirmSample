@@ -28,6 +28,8 @@ if 'filtered_data' not in st.session_state:
     st.session_state.filtered_data = None
 if 'metrics' not in st.session_state:
     st.session_state.metrics = {}
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = True  # Prevent automatic loading of sample data
 
 def main():
     """Main function to run the Streamlit app."""
@@ -198,7 +200,7 @@ def main():
                 except Exception as e:
                     st.error(f"Database Error: {str(e)}")
             
-            if st.button("Load Sample Data") or st.session_state.data is None:
+            if st.button("Load Sample Data"):
                 with st.spinner("Loading sample data..."):
                     # Load sample data
                     sample_data = load_sample_data()
@@ -209,36 +211,28 @@ def main():
                     analyzer = DataAnalyzer(sample_data)
                     st.session_state.metrics = analyzer.calculate_metrics()
                     
+                    # Inform user that sample data was loaded successfully
+                    st.success("Sample data loaded successfully!")
+                    
                     # Save to database if requested
                     if save_sample_to_db:
-                        try:
-                            processor = DataProcessor()
-                            # Convert dataframe to list of excel files - this is a hack since we need to use
-                            # the existing process_files method
-                            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-                                sample_data.to_excel(tmp.name, index=False)
-                                file_path = tmp.name
-                            
-                            # Process and save to database
-                            _, db_result = processor.process_files([file_path], save_to_db=True)
-                            
-                            # Show success message
-                            if db_result['status'] == 'success':
-                                st.success("Sample data loaded successfully and saved to database!")
-                            else:
-                                st.success("Sample data loaded successfully!")
-                                st.warning(f"Database save failed: {db_result.get('message', 'Unknown error')}")
-                            
-                            # Clean up temp file
+                        with st.spinner("Saving sample data to database..."):
                             try:
-                                os.unlink(file_path)
-                            except:
-                                pass
-                        except Exception as e:
-                            st.success("Sample data loaded successfully!")
-                            st.warning(f"Database save failed: {str(e)}")
-                    else:
-                        st.success("Sample data loaded successfully!")
+                                # Create a database instance
+                                db = ArbitrationDatabase()
+                                
+                                # Convert the sample data to database format and save
+                                db_data = db._map_dataframe_to_db(sample_data)
+                                db_result = db.save_data(db_data)
+                                
+                                # Show success or error message
+                                if db_result['status'] == 'success':
+                                    st.success(f"Successfully saved sample data to database! " +
+                                              f"({db_result['inserted']} inserted, {db_result['updated']} updated)")
+                                else:
+                                    st.error(f"Error saving to database: {db_result.get('message', 'Unknown error')}")
+                            except Exception as e:
+                                st.error(f"Error saving to database: {str(e)}")
         
         # Only show filters if data is loaded
         if st.session_state.data is not None:
