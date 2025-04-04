@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 import re
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 import os
+from database import ArbitrationDatabase
 
 class DataProcessor:
     """Class for processing arbitration data from Excel files."""
@@ -45,17 +46,22 @@ class DataProcessor:
             'Date_Filed', 'Date_Closed', 'Award_Amount', 'Claim_Amount', 'Forum'
         ]
     
-    def process_files(self, file_paths: List[str]) -> pd.DataFrame:
+    def process_files(self, file_paths: List[str], save_to_db: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
         Process all Excel files and combine them into a single dataframe.
+        Optionally save to the database.
         
         Args:
             file_paths: List of file paths to Excel files
+            save_to_db: Whether to save the processed data to the database
             
         Returns:
-            Combined and processed dataframe
+            Tuple containing:
+                - Combined and processed dataframe
+                - Dictionary with database operation results (if save_to_db is True)
         """
         all_dataframes = []
+        db_result = {"status": "not_saved", "message": "Data was not saved to database"}
         
         for file_path in file_paths:
             try:
@@ -91,9 +97,114 @@ class DataProcessor:
             # Final cleaning
             combined_df = self._final_cleaning(combined_df)
             
-            return combined_df
+            # Calculate consumer_prevailed and business_prevailed flags
+            combined_df = self._calculate_prevailed_flags(combined_df)
+            
+            # Calculate case duration in days
+            combined_df = self._calculate_case_duration(combined_df)
+            
+            # Save to database if requested
+            if save_to_db:
+                try:
+                    db = ArbitrationDatabase()
+                    db_result = db.save_data(combined_df)
+                except Exception as e:
+                    db_result = {"status": "error", "message": f"Database error: {str(e)}"}
+            
+            return combined_df, db_result
         
-        return pd.DataFrame()
+        return pd.DataFrame(), db_result
+    
+    def load_from_database(self, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+        """
+        Load arbitration data from the database.
+        
+        Args:
+            filters: Dictionary of database filters to apply
+            
+        Returns:
+            DataFrame containing the loaded data
+        """
+        try:
+            db = ArbitrationDatabase()
+            df = db.load_data(filters)
+            return df
+        except Exception as e:
+            print(f"Error loading data from database: {e}")
+            return pd.DataFrame()
+    
+    def _calculate_prevailed_flags(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate flags for who prevailed in each case.
+        
+        Args:
+            df: DataFrame to process
+            
+        Returns:
+            DataFrame with consumer_prevailed and business_prevailed flags
+        """
+        # Make a copy to avoid modifying the original
+        df = df.copy()
+        
+        # Initialize columns if they don't exist
+        if 'Consumer_Prevailed' not in df.columns:
+            df['Consumer_Prevailed'] = False
+        if 'Business_Prevailed' not in df.columns:
+            df['Business_Prevailed'] = False
+        
+        # Set flags based on disposition type and award amount
+        if 'Disposition_Type' in df.columns:
+            # Cases where consumer clearly prevailed
+            consumer_prevailed_mask = (
+                (df['Disposition_Type'].str.contains('Award', case=False, na=False)) & 
+                (df['Award_Amount'] > 0)
+            )
+            df.loc[consumer_prevailed_mask, 'Consumer_Prevailed'] = True
+            
+            # Cases where business clearly prevailed
+            business_prevailed_mask = (
+                ((df['Disposition_Type'].str.contains('Dismiss', case=False, na=False)) |
+                 (df['Disposition_Type'].str.contains('Withdrawn', case=False, na=False))) |
+                ((df['Disposition_Type'].str.contains('Award', case=False, na=False)) & 
+                 (df['Award_Amount'] == 0))
+            )
+            df.loc[business_prevailed_mask, 'Business_Prevailed'] = True
+            
+            # For settlements, neither party clearly prevailed
+            settlement_mask = df['Disposition_Type'].str.contains('Settle', case=False, na=False)
+            df.loc[settlement_mask, ['Consumer_Prevailed', 'Business_Prevailed']] = False
+        
+        return df
+    
+    def _calculate_case_duration(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate the duration of each case in days.
+        
+        Args:
+            df: DataFrame to process
+            
+        Returns:
+            DataFrame with case_duration_days column
+        """
+        # Make a copy to avoid modifying the original
+        df = df.copy()
+        
+        # Initialize column if it doesn't exist
+        if 'Case_Duration_Days' not in df.columns:
+            df['Case_Duration_Days'] = None
+        
+        # Calculate duration for cases with both dates
+        if 'Date_Filed' in df.columns and 'Date_Closed' in df.columns:
+            # Only calculate for rows with valid dates
+            valid_dates_mask = (~pd.isna(df['Date_Filed'])) & (~pd.isna(df['Date_Closed']))
+            
+            # Calculate duration in days
+            df.loc[valid_dates_mask, 'Case_Duration_Days'] = (
+                df.loc[valid_dates_mask, 'Date_Closed'] - 
+                df.loc[valid_dates_mask, 'Date_Filed']
+            ).dt.days
+        
+        return df
     
     def _infer_source_from_content(self, file_path: str) -> str:
         """
