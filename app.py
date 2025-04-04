@@ -30,6 +30,8 @@ if 'metrics' not in st.session_state:
     st.session_state.metrics = {}
 if 'initialized' not in st.session_state:
     st.session_state.initialized = True  # Prevent automatic loading of sample data
+if 'previous_source' not in st.session_state:
+    st.session_state.previous_source = "Use Sample Data"  # Track the previous data source
 
 def main():
     """Main function to run the Streamlit app."""
@@ -42,11 +44,24 @@ def main():
         st.header("Data Management")
         
         # Data source options
+        # Create a key for the radio button to track changes
         data_source = st.radio(
             "Data Source",
             ["Upload Excel Files", "Use Sample Data"],
-            index=1  # Default to sample data
+            index=1,  # Default to sample data
+            key="data_source_radio"
         )
+        
+        # Check if data source has changed
+        if st.session_state.previous_source != data_source:
+            # If switching to Upload Excel Files, clear any existing data
+            if data_source == "Upload Excel Files" and st.session_state.data is not None:
+                st.session_state.data = None
+                st.session_state.filtered_data = None
+                st.session_state.metrics = {}
+            
+            # Update previous source
+            st.session_state.previous_source = data_source
         
         if data_source == "Upload Excel Files":
             uploaded_files = st.file_uploader(
