@@ -269,9 +269,13 @@ def main():
                         max_value=max_date.date()
                     )
             
-            # Helper function to safely sort options with None values
+            # Helper function to safely sort options with None values and mixed types
             def safe_sort(options):
-                return sorted([opt for opt in options if opt is not None])
+                # Filter out None values
+                filtered_options = [opt for opt in options if opt is not None]
+                
+                # Convert all values to strings for consistent sorting
+                return sorted(filtered_options, key=lambda x: str(x))
             
             # Arbitrator filter
             arbitrator_options = ['All'] + safe_sort(st.session_state.data['Arbitrator_Name'].unique().tolist())

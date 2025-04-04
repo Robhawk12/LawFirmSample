@@ -92,22 +92,30 @@ class ArbitrationDatabase:
                 for _, row in db_data.iterrows():
                     case_id = row['case_id']
                     
-                    # Check if case already exists
+                    # Check if case already exists - ensure case_id is a string
+                    case_id_str = str(case_id) if case_id is not None else None
                     stmt = select(self.arbitration_cases).where(
-                        self.arbitration_cases.c.case_id == case_id
+                        self.arbitration_cases.c.case_id == case_id_str
                     )
                     existing = conn.execute(stmt).fetchone()
                     
                     if existing:
-                        # Update existing case
+                        # Update existing case - using the string version of case_id
+                        # Convert row to dictionary and ensure consistent types
+                        row_dict = {k: v for k, v in row.items() if k != 'case_id'}
+                        
                         stmt = self.arbitration_cases.update().where(
-                            self.arbitration_cases.c.case_id == case_id
-                        ).values(**{k: v for k, v in row.items() if k != 'case_id'})
+                            self.arbitration_cases.c.case_id == case_id_str
+                        ).values(**row_dict)
                         conn.execute(stmt)
                         updated += 1
                     else:
-                        # Insert new case
-                        conn.execute(self.arbitration_cases.insert().values(**row))
+                        # Convert row to dictionary and ensure case_id is a string
+                        row_dict = row.to_dict()
+                        row_dict['case_id'] = str(row_dict['case_id']) if row_dict['case_id'] is not None else None
+                        
+                        # Insert new case with proper data types
+                        conn.execute(self.arbitration_cases.insert().values(**row_dict))
                         inserted += 1
             
             return {
