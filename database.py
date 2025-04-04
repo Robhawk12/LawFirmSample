@@ -284,19 +284,16 @@ class ArbitrationDatabase:
         try:
             with self.engine.connect() as conn:
                 # Get total row count
-                row_count = conn.execute(
-                    select([self.arbitration_cases])
-                ).rowcount
+                result = conn.execute(select(self.arbitration_cases))
+                row_count = len(result.fetchall())
                 
                 # Get unique arbitrators count
-                arb_count = conn.execute(
-                    select([self.arbitration_cases.c.arbitrator_name]).distinct()
-                ).rowcount
+                result = conn.execute(select(self.arbitration_cases.c.arbitrator_name).distinct())
+                arb_count = len(result.fetchall())
                 
                 # Get unique respondents count
-                resp_count = conn.execute(
-                    select([self.arbitration_cases.c.respondent_name]).distinct()
-                ).rowcount
+                result = conn.execute(select(self.arbitration_cases.c.respondent_name).distinct())
+                resp_count = len(result.fetchall())
                 
                 return {
                     'status': 'success',
