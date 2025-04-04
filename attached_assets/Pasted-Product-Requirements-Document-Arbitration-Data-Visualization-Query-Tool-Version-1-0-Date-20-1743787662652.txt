@@ -1,0 +1,270 @@
+Product Requirements Document: Arbitration Data Visualization & Query Tool
+
+Version: 1.0
+Date: 2023-10-27
+Author: [Your Name/AI Assistant]
+Stakeholders: Requesting Firm Member(s), Development Team (Brittany)
+
+1. Introduction
+
+This document outlines the requirements for a data visualization and query tool designed to consolidate and analyze arbitration case data currently stored across approximately 35 separate Excel spreadsheets. The primary goal is to create an interactive visual dashboard allowing users to easily filter and explore aggregated case data. A secondary goal is to enable natural language querying of the consolidated database for specific insights. The primary use case is to support the firm's decision-making process when evaluating and selecting arbitrators, and to understand patterns related to specific respondents (companies).
+
+2. Goals
+
+P1 (Primary): Data Consolidation & Visualization: Aggregate data from ~35 Excel files (starting with AAA, then JAMS) into a single, queryable source and present it via an interactive visual dashboard (preferably integrated into the existing Power BI setup).
+
+P2 (Secondary): AI-Powered Query Interface: Enable users to ask natural language questions against the consolidated database to retrieve specific information and summaries (e.g., arbitrator case counts, outcome statistics, average awards, case lists).
+
+Overall: Improve the efficiency and effectiveness of arbitrator research and respondent analysis by providing easy access to historical case data.
+
+3. Target Users
+
+Attorneys
+
+Paralegals
+
+Legal Staff involved in arbitration case preparation and strategy.
+
+4. Scope
+
+In Scope:
+
+Data Ingestion: Processing and loading data from ~35 provided Excel spreadsheets (AAA and JAMS sources).
+
+Data Cleaning & Standardization: Handling variations in formatting between files, mapping similar fields, addressing potential inconsistencies (within reason).
+
+Data Aggregation: Combining data from all spreadsheets into a unified data model.
+
+Duplicate Handling Strategy: Implementing a method to identify and manage potential duplicate case entries, particularly within the JAMS data.
+
+Visual Dashboard (P1):
+
+Development within Power BI.
+
+Integration as a new tab/section within the firm's existing Power BI dashboards.
+
+Display of key metrics (e.g., total cases, total claims, average claims - see existing dashboard examples).
+
+Filtering capabilities by key dimensions: Arbitrator, Respondent (Company), Case Type/Disposition, Consumer Attorney, Respondent Attorney, Forum (AAA/JAMS), Date Range (if available).
+
+Visualizations: Tables listing cases, charts showing counts/trends by key dimensions (e.g., cases per arbitrator, dispositions per respondent).
+
+AI Query Interface (P2):
+
+Mechanism to input natural language questions (e.g., using Power BI Q&A, potentially Locusive, or other agreed-upon tech).
+
+Ability to answer specific question types identified by the user (arbitrator case counts, outcomes, average awards, case lists).
+
+Out of Scope:
+
+Real-time data updates (system will rely on periodic manual updates with new spreadsheets unless otherwise specified).
+
+Ingestion of data formats other than the provided Excel spreadsheets.
+
+Building a standalone application separate from the existing Power BI environment (unless integration proves infeasible).
+
+Advanced predictive analytics or machine learning beyond the specified query capabilities.
+
+External data source integration (beyond the provided spreadsheets).
+
+5. Functional Requirements (Features)
+
+5.1 Data Handling & Preparation (Underlying Engine - Power Query likely candidate)
+
+FH-01: System must ingest data from Excel files (.xlsx, .xls).
+
+FH-02: System must handle variations in file sizes (5MB to 20MB+).
+
+FH-03: System must prioritize ingestion and processing of AAA forum data first.
+
+FH-04: System must subsequently ingest and process JAMS forum data.
+
+FH-05: Data schema must be standardized across AAA and JAMS sources, mapping common fields (e.g., Case ID, Arbitrator Name, Parties, Attorneys, Disposition, Award Amount if available). Discrepancies to be flagged for review.
+
+FH-06: System must identify potential duplicate case entries, particularly within JAMS data (using Case ID or a combination of key fields). A strategy for handling duplicates (e.g., flagging, merging, retaining most complete record) needs to be defined and implemented.
+
+FH-07: Data model must use Case ID as a potential primary key, where available and unique.
+
+FH-08: Data cleaning should handle common issues like leading/trailing spaces, inconsistent naming conventions (where feasible), and potentially standardizing date formats (if applicable).
+
+5.2 Visual Dashboard (P1 - Power BI)
+
+VD-01: The visual dashboard must be accessible as a tab or integrated section within the firm's existing Power BI workspace/reports.
+
+VD-02: Dashboard must display summary statistics (similar to existing dashboard examples): Total Disputes, Claim Amounts (Total/Average for Business/Consumer if applicable), Fees Collected (if applicable).
+
+VD-03: Dashboard must include interactive filters for:
+
+Arbitrator Name
+
+Respondent (Company Name, e.g., Coinbase, Crypto.com)
+
+Consumer Attorney Name/Firm
+
+Respondent Attorney Name/Firm (if available)
+
+Arbitration Forum (AAA, JAMS)
+
+Type of Disposition (Settled, Awarded, Dismissed, etc.)
+
+Date Range (if case dates are available and standardized)
+
+VD-04: Dashboard must include a searchable/filterable table view listing individual arbitration cases with key details (Case Name, Case ID, Parties, Attorneys, Arbitrator, Disposition, Forum).
+
+VD-05: Dashboard must include visualizations (e.g., bar charts, pie charts) to show:
+
+Case count by Arbitrator
+
+Case count by Respondent
+
+Distribution of Case Dispositions (overall and filterable by Arbitrator/Respondent)
+
+Case count by Consumer Attorney/Firm
+
+VD-06: Visualizations must update dynamically based on applied filters.
+
+VD-07: Users must be able to export filtered data lists (e.g., to Excel/CSV) from tables, if technically feasible within Power BI constraints.
+
+5.3 AI Query Interface (P2)
+
+AIQ-01: System must provide an interface for users to type natural language questions about the arbitration data.
+
+AIQ-02: System must be able to parse and understand queries related to:
+
+Counting cases for a specific arbitrator ("how many arbitrations has Arbitrator X had?")
+
+Analyzing outcomes for a specific arbitrator ("How many times has Arbitrator Y ruled for the complainant?")
+
+Calculating average awards for a specific arbitrator ("what was the average award given by Arbitrator Y [when ruling for complainant]?") - Requires reliable Award Amount data.
+
+Listing cases handled by a specific arbitrator ("List the names of all the arbitrations handled by Arbitrator Z.")
+
+Analyzing outcomes related to specific respondents ("How many times has Arbitrator X ruled for the consumer against Coinbase?")
+
+AIQ-03: System must return answers in a clear, understandable format (e.g., text summary, numerical value, list of cases).
+
+AIQ-04: The specific technology (e.g., Power BI Q&A, Locusive integration) will be determined based on feasibility, cost, and integration capabilities.
+
+6. Data Requirements
+
+Source Format: Microsoft Excel (.xlsx, .xls).
+
+Key Data Fields (based on email and screenshots - requires confirmation from spreadsheets):
+
+Case ID (Potentially Key)
+
+Case Name
+
+Arbitration Forum (AAA/JAMS - may need to be inferred or added during processing)
+
+Parties (Complainant/Consumer Name, Respondent/Company Name)
+
+Attorneys (Consumer Attorney Name/Firm, Respondent Attorney Name/Firm)
+
+Arbitrator Name
+
+Date Filed/Initiated (if available)
+
+Date Closed/Resolved (if available)
+
+Type of Disposition (Settled, Awarded, Dismissed, Withdrawn, Administrative, Dismissed on the Merits, etc.)
+
+Prevailing Party (if explicitly stated)
+
+Award Amount (if applicable and available)
+
+Source of Authority (e.g., AAA Clause)
+
+Dispute Type / Subtype (e.g., Consumer / Financial Services)
+
+Consumer Represented by Attorney (Yes/No)
+
+Document Only Proceeding (Yes/No)
+
+Type of Hearing (e.g., Videoconference, In-Person)
+
+Other fields present in spreadsheets to be reviewed for inclusion.
+
+Data Issues: Expect variations in column names, formatting, potential misspellings, missing data, and duplicate entries (especially in JAMS data).
+
+7. Non-Functional Requirements
+
+NFR-01 (Performance): Dashboard visuals and filters should load within an acceptable timeframe (e.g., < 5-10 seconds for typical operations). AI queries should respond within a reasonable time (e.g., < 10-15 seconds).
+
+NFR-02 (Usability): The dashboard interface must be intuitive for non-technical legal staff. Filters should be clearly labeled and easy to apply/remove.
+
+NFR-03 (Scalability): The system architecture (data model, reports) should accommodate the addition of new spreadsheet data periodically without requiring a complete redesign.
+
+NFR-04 (Maintainability): The data transformation logic (Power Query) and Power BI reports should be organized and documented to allow for future updates and troubleshooting by the development team (Brittany).
+
+NFR-05 (Security): Access to the dashboard will be controlled via existing Power BI workspace permissions. No separate access control layer is required unless specified. Data should be handled according to the firm's confidentiality policies.
+
+8. Design & UX Considerations
+
+Maintain visual consistency with the firm's existing Power BI dashboards (fonts, color schemes, layout).
+
+Prioritize clarity and ease of interpretation in visualizations. Use clear titles and labels.
+
+Ensure filter controls are prominent and easy to understand.
+
+The layout should facilitate the primary use case: quickly finding information about a specific arbitrator or respondent.
+
+9. Success Metrics
+
+Successful aggregation of data from all provided spreadsheets into the Power BI data model.
+
+Delivery of the interactive visual dashboard (P1) meeting the specified filtering and visualization requirements.
+
+Positive user feedback regarding ease of use and value in arbitrator/respondent research.
+
+Reduction in time spent manually searching spreadsheets for case information.
+
+Successful implementation of the AI Query feature (P2) capable of answering the target question types.
+
+User adoption of the new tool/dashboard tab.
+
+10. Open Questions & Future Considerations
+
+Open: What is the exact logic/criteria for identifying duplicate cases in the JAMS data?
+
+Open: Are there specific data cleaning/standardization rules required (e.g., handling variations in company names like "Coinbase Inc." vs. "Coinbase Global")?
+
+Open: Confirmation needed on the availability and consistency of key fields like Award Amount and specific Dates across all files.
+
+Open: Final decision on the technology stack for the AI Query component (P2).
+
+Future: Potential for adding sentiment analysis to case notes (if available).
+
+Future: Potential integration with other internal case management systems.
+
+Future: More advanced analytics or trend monitoring.
+
+11. Release Criteria & Phasing
+
+Phase 1 (MVP):
+
+Successful ingestion, cleaning, standardization, and aggregation of AAA data only.
+
+Delivery of the interactive Power BI dashboard with filtering and visualizations based on AAA data.
+
+Integration into the existing Power BI environment.
+
+Goal: Provide immediate value for the most frequent use cases (AAA arbitrator/respondent analysis).
+
+Phase 2:
+
+Ingestion, cleaning, standardization, and aggregation of JAMS data.
+
+Implementation of the defined JAMS de-duplication strategy.
+
+Update Power BI dashboard to include JAMS data and allow filtering by Forum.
+
+Goal: Provide a comprehensive view across both major forums.
+
+Phase 3 (Secondary Priority):
+
+Implementation and integration of the AI Query Interface (P2).
+
+Testing and refinement of natural language query understanding.
+
+Goal: Enhance data accessibility through natural language interaction.
