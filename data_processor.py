@@ -46,7 +46,7 @@ class DataProcessor:
             'Date_Filed', 'Date_Closed', 'Award_Amount', 'Claim_Amount', 'Forum'
         ]
     
-    def process_files(self, file_paths: List[str], save_to_db: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    def process_files(self, file_paths: List[str], save_to_db: bool = True, progress_callback=None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
         Process all Excel files and combine them into a single dataframe.
         Optionally save to the database.
@@ -54,6 +54,7 @@ class DataProcessor:
         Args:
             file_paths: List of file paths to Excel files
             save_to_db: Whether to save the processed data to the database
+            progress_callback: Optional function to report progress (receives progress fraction and message)
             
         Returns:
             Tuple containing:
@@ -63,8 +64,22 @@ class DataProcessor:
         all_dataframes = []
         db_result = {"status": "not_saved", "message": "Data was not saved to database"}
         
-        for file_path in file_paths:
+        # Report progress helper function
+        def report_progress(fraction, message):
+            if progress_callback:
+                progress_callback(fraction, message)
+            else:
+                # Just print if no callback
+                print(f"Progress ({fraction:.0%}): {message}")
+        
+        # Process each file with progress tracking
+        total_files = len(file_paths)
+        for file_idx, file_path in enumerate(file_paths):
             try:
+                # Report starting to process this file
+                file_progress = file_idx / total_files
+                report_progress(file_progress, f"Processing file {file_idx+1} of {total_files}: {os.path.basename(file_path)}")
+                
                 # Determine source (AAA or JAMS) from filename
                 filename = os.path.basename(file_path).lower()
                 if 'aaa' in filename:
@@ -74,45 +89,173 @@ class DataProcessor:
                 else:
                     # If source cannot be determined from filename, try to infer from content
                     source = self._infer_source_from_content(file_path)
+                    
+                # Check file size to determine processing approach
+                file_size = os.path.getsize(file_path)
+                is_large_file = file_size > 10 * 1024 * 1024  # 10MB threshold
                 
-                # Read the Excel file
-                df = pd.read_excel(file_path, engine='openpyxl')
+                if is_large_file:
+                    # For large files, use a chunked approach
+                    report_progress(file_progress + 0.02, f"Large file detected ({file_size/(1024*1024):.1f}MB) - using chunked processing")
+                    
+                    # First read a small preview to get column names and data types
+                    preview_df = pd.read_excel(file_path, nrows=5, engine='openpyxl')
+                    
+                    # Get total rows to better track progress (approximation)
+                    try:
+                        # Try to get sheet dimensions quickly
+                        import openpyxl
+                        wb = openpyxl.load_workbook(file_path, read_only=True)
+                        sheet = wb.active
+                        total_rows = sheet.max_row
+                        wb.close()
+                    except:
+                        # Fallback if can't get exact row count
+                        total_rows = int(file_size / 1000)  # Rough estimate
+                    
+                    # Define chunk size based on file size
+                    chunk_size = 5000 if file_size < 50 * 1024 * 1024 else 1000
+                    
+                    # Process in chunks
+                    offset = 0
+                    chunk_dfs = []
+                    
+                    while True:
+                        chunk_progress = min(0.8, (offset / total_rows))
+                        chunk_file_progress = file_progress + (chunk_progress * (1/total_files))
+                        report_progress(chunk_file_progress, 
+                                       f"Reading chunk at row {offset} of file {file_idx+1}/{total_files}")
+                        
+                        # Read a chunk
+                        try:
+                            # Use skiprows to get the next chunk
+                            skiprows = list(range(1, offset + 1)) if offset > 0 else None
+                            chunk = pd.read_excel(file_path, 
+                                                 skiprows=skiprows, 
+                                                 nrows=chunk_size,
+                                                 engine='openpyxl')
+                            
+                            # If chunk is empty, we're done
+                            if chunk.empty:
+                                break
+                                
+                            # Process chunk
+                            processed_chunk = self._process_dataframe(chunk, source)
+                            chunk_dfs.append(processed_chunk)
+                            
+                            # Move to next chunk
+                            offset += len(chunk)
+                            
+                            # If chunk size is less than requested, we're at the end
+                            if len(chunk) < chunk_size:
+                                break
+                                
+                        except Exception as chunk_error:
+                            report_progress(chunk_file_progress, 
+                                           f"Error processing chunk at row {offset}: {str(chunk_error)}")
+                            # If error in chunk, move on to the next one
+                            offset += chunk_size
+                            
+                            # If we've processed a lot of chunks and still getting errors, abort
+                            if offset > total_rows * 0.8:
+                                raise Exception(f"Too many chunk errors, aborting: {str(chunk_error)}")
+                    
+                    # Combine all chunks
+                    if chunk_dfs:
+                        report_progress(file_progress + 0.9/total_files, 
+                                       f"Combining {len(chunk_dfs)} chunks from file {file_idx+1}")
+                        processed_df = pd.concat(chunk_dfs, ignore_index=True)
+                        all_dataframes.append(processed_df)
+                    else:
+                        raise Exception("No data could be processed from file chunks")
+                        
+                else:
+                    # For smaller files, process normally
+                    report_progress(file_progress + 0.3/total_files, f"Reading file {file_idx+1}")
+                    df = pd.read_excel(file_path, engine='openpyxl')
+                    
+                    report_progress(file_progress + 0.6/total_files, f"Processing file {file_idx+1}")
+                    processed_df = self._process_dataframe(df, source)
+                    
+                    all_dataframes.append(processed_df)
                 
-                # Process the dataframe
-                processed_df = self._process_dataframe(df, source)
-                
-                # Add to list of dataframes
-                all_dataframes.append(processed_df)
+                report_progress(file_progress + 0.95/total_files, f"Completed file {file_idx+1} of {total_files}")
                 
             except Exception as e:
-                print(f"Error processing file {file_path}: {e}")
+                error_msg = f"Error processing file {file_path}: {str(e)}"
+                report_progress(file_progress + 0.95/total_files, error_msg)
+                print(error_msg)
         
         # Combine all dataframes
         if all_dataframes:
+            report_progress(0.85, "Combining all processed files")
             combined_df = pd.concat(all_dataframes, ignore_index=True)
             
             # Handle duplicates
+            report_progress(0.88, "Handling duplicate records")
             combined_df = self._handle_duplicates(combined_df)
             
             # Final cleaning
+            report_progress(0.90, "Performing final data cleanup")
             combined_df = self._final_cleaning(combined_df)
             
             # Calculate consumer_prevailed and business_prevailed flags
+            report_progress(0.92, "Calculating case outcome flags")
             combined_df = self._calculate_prevailed_flags(combined_df)
             
             # Calculate case duration in days
+            report_progress(0.94, "Calculating case durations")
             combined_df = self._calculate_case_duration(combined_df)
             
             # Save to database if requested
             if save_to_db:
                 try:
+                    report_progress(0.95, "Preparing database connection")
                     db = ArbitrationDatabase()
-                    db_result = db.save_data(combined_df)
+                    
+                    # For large datasets, save in chunks
+                    if len(combined_df) > 1000:
+                        report_progress(0.96, "Saving data to database in chunks")
+                        
+                        # Create smaller batches for database insert
+                        total_inserted = 0
+                        total_updated = 0
+                        rows_per_batch = 500
+                        
+                        for i in range(0, len(combined_df), rows_per_batch):
+                            batch = combined_df.iloc[i:i+rows_per_batch].copy()
+                            batch_progress = i / len(combined_df)
+                            report_progress(0.96 + 0.03 * batch_progress, 
+                                          f"Saving batch {i//rows_per_batch + 1}/{(len(combined_df)//rows_per_batch) + 1} to database")
+                            
+                            batch_result = db.save_data(batch)
+                            
+                            if batch_result['status'] == 'success':
+                                total_inserted += batch_result.get('inserted', 0)
+                                total_updated += batch_result.get('updated', 0)
+                        
+                        db_result = {
+                            "status": "success",
+                            "inserted": total_inserted,
+                            "updated": total_updated,
+                            "message": "Data saved to database in chunks"
+                        }
+                    else:
+                        # For smaller datasets, save all at once
+                        report_progress(0.96, "Saving data to database")
+                        db_result = db.save_data(combined_df)
+                    
+                    report_progress(0.99, "Database operations complete")
+                    
                 except Exception as e:
-                    db_result = {"status": "error", "message": f"Database error: {str(e)}"}
+                    error_msg = f"Database error: {str(e)}"
+                    report_progress(0.99, error_msg)
+                    db_result = {"status": "error", "message": error_msg}
             
+            report_progress(1.0, "Processing complete")
             return combined_df, db_result
         
+        report_progress(1.0, "No data was processed")
         return pd.DataFrame(), db_result
     
     def load_from_database(self, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:

@@ -8,11 +8,11 @@ from typing import Dict, List, Optional, Union, Any
 import pandas as pd
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float, 
-    Date, Text, Boolean, MetaData, Table, inspect
+    Date, Text, Boolean, MetaData, Table, inspect,
+    func, distinct, select, delete
 )
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine import Engine
-from sqlalchemy.sql import select, delete
 
 # Get database URL from environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -80,43 +80,68 @@ class ArbitrationDatabase:
             Dictionary with status and details
         """
         try:
-            # Map DataFrame columns to database columns
-            db_data = self._map_dataframe_to_db(data)
+            # Map DataFrame columns to database columns if needed
+            if 'case_id' not in data.columns and 'Case_ID' in data.columns:
+                db_data = self._map_dataframe_to_db(data)
+            else:
+                db_data = data.copy()
             
             # Insert data into the database
             with self.engine.begin() as conn:
-                # For each row, check if it already exists by case_id
                 inserted = 0
                 updated = 0
                 
+                # For efficient data processing, gather all case_ids at once
+                all_case_ids = [str(cid) if cid is not None else None for cid in db_data['case_id']]
+                
+                # Check which case_ids already exist in the database in one query
+                existing_ids_query = select(self.arbitration_cases.c.case_id).where(
+                    self.arbitration_cases.c.case_id.in_(all_case_ids)
+                )
+                existing_ids_result = conn.execute(existing_ids_query).fetchall()
+                existing_ids = {row[0] for row in existing_ids_result}
+                
+                # Process in batches for better performance
+                batch_size = 250  # Adjust based on the size of each record
+                
+                # Prepare records for insert and update
+                records_to_insert = []
+                
+                # First pass: collect records to insert (won't exist in DB)
                 for _, row in db_data.iterrows():
                     case_id = row['case_id']
-                    
-                    # Check if case already exists - ensure case_id is a string
                     case_id_str = str(case_id) if case_id is not None else None
-                    stmt = select(self.arbitration_cases).where(
-                        self.arbitration_cases.c.case_id == case_id_str
-                    )
-                    existing = conn.execute(stmt).fetchone()
                     
-                    if existing:
-                        # Update existing case - using the string version of case_id
-                        # Convert row to dictionary and ensure consistent types
-                        row_dict = {k: v for k, v in row.items() if k != 'case_id'}
-                        
-                        stmt = self.arbitration_cases.update().where(
-                            self.arbitration_cases.c.case_id == case_id_str
-                        ).values(**row_dict)
-                        conn.execute(stmt)
-                        updated += 1
-                    else:
+                    if case_id_str not in existing_ids:
                         # Convert row to dictionary and ensure case_id is a string
-                        row_dict = row.to_dict()
-                        row_dict['case_id'] = str(row_dict['case_id']) if row_dict['case_id'] is not None else None
+                        row_dict = {k: (str(v) if k == 'case_id' and v is not None else v) 
+                                   for k, v in row.items() if not pd.isna(v)}
+                        records_to_insert.append(row_dict)
+                
+                # Batch inserts for better performance
+                for i in range(0, len(records_to_insert), batch_size):
+                    batch = records_to_insert[i:i+batch_size]
+                    if batch:  # Skip empty batches
+                        conn.execute(self.arbitration_cases.insert(), batch)
+                        inserted += len(batch)
+                
+                # Second pass: update existing records
+                for _, row in db_data.iterrows():
+                    case_id = row['case_id']
+                    case_id_str = str(case_id) if case_id is not None else None
+                    
+                    if case_id_str in existing_ids:
+                        # Update existing record
+                        # Remove NaN values and case_id from update
+                        row_dict = {k: v for k, v in row.items() 
+                                   if k != 'case_id' and not pd.isna(v)}
                         
-                        # Insert new case with proper data types
-                        conn.execute(self.arbitration_cases.insert().values(**row_dict))
-                        inserted += 1
+                        if row_dict:  # Only update if there are values to update
+                            stmt = self.arbitration_cases.update().where(
+                                self.arbitration_cases.c.case_id == case_id_str
+                            ).values(**row_dict)
+                            conn.execute(stmt)
+                            updated += 1
             
             return {
                 'status': 'success',
@@ -180,12 +205,13 @@ class ArbitrationDatabase:
         
         return db_df
     
-    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+    def load_data(self, filters: Optional[Dict[str, Any]] = None, chunk_size: int = 10000) -> pd.DataFrame:
         """
         Load arbitration data from the database.
         
         Args:
             filters: Dictionary of filters to apply
+            chunk_size: Number of records to load at once for large datasets
             
         Returns:
             DataFrame containing arbitration data
@@ -199,10 +225,39 @@ class ArbitrationDatabase:
                     if hasattr(self.arbitration_cases.c, key) and value is not None:
                         query = query.where(getattr(self.arbitration_cases.c, key) == value)
             
+            # Get total row count to determine if chunking is needed
+            count_query = select([func.count()]).select_from(self.arbitration_cases)
+            if filters:
+                for key, value in filters.items():
+                    if hasattr(self.arbitration_cases.c, key) and value is not None:
+                        count_query = count_query.where(getattr(self.arbitration_cases.c, key) == value)
+            
             # Execute query and convert to DataFrame
             with self.engine.connect() as conn:
-                result = conn.execute(query)
-                data = pd.DataFrame(result.fetchall(), columns=result.keys())
+                # Check if large dataset (>chunk_size rows)
+                total_rows = conn.execute(count_query).scalar()
+                
+                if total_rows > chunk_size:
+                    # For large datasets, load in chunks
+                    all_chunks = []
+                    
+                    # Apply ordering to ensure consistent chunking
+                    ordered_query = query.order_by(self.arbitration_cases.c.id)
+                    
+                    for offset in range(0, total_rows, chunk_size):
+                        chunk_query = ordered_query.limit(chunk_size).offset(offset)
+                        chunk_result = conn.execute(chunk_query)
+                        chunk_data = pd.DataFrame(chunk_result.fetchall(), columns=chunk_result.keys())
+                        all_chunks.append(chunk_data)
+                    
+                    if all_chunks:
+                        data = pd.concat(all_chunks, ignore_index=True)
+                    else:
+                        data = pd.DataFrame()
+                else:
+                    # For smaller datasets, load all at once
+                    result = conn.execute(query)
+                    data = pd.DataFrame(result.fetchall(), columns=result.keys())
             
             # Map database columns back to DataFrame columns
             return self._map_db_to_dataframe(data)
@@ -283,24 +338,30 @@ class ArbitrationDatabase:
         """
         try:
             with self.engine.connect() as conn:
-                # Get total row count
-                result = conn.execute(select(self.arbitration_cases))
-                row_count = len(result.fetchall())
+                # Use SQL COUNT for better performance on large tables
+                # Get total row count using COUNT
+                count_query = select([
+                    func.count().label('total_count'),
+                    func.count(distinct(self.arbitration_cases.c.arbitrator_name)).label('arb_count'),
+                    func.count(distinct(self.arbitration_cases.c.respondent_name)).label('resp_count')
+                ]).select_from(self.arbitration_cases)
                 
-                # Get unique arbitrators count
-                result = conn.execute(select(self.arbitration_cases.c.arbitrator_name).distinct())
-                arb_count = len(result.fetchall())
+                result = conn.execute(count_query).fetchone()
                 
-                # Get unique respondents count
-                result = conn.execute(select(self.arbitration_cases.c.respondent_name).distinct())
-                resp_count = len(result.fetchall())
-                
-                return {
-                    'status': 'success',
-                    'total_cases': row_count,
-                    'unique_arbitrators': arb_count,
-                    'unique_respondents': resp_count
-                }
+                if result:
+                    return {
+                        'status': 'success',
+                        'total_cases': result['total_count'],
+                        'unique_arbitrators': result['arb_count'],
+                        'unique_respondents': result['resp_count']
+                    }
+                else:
+                    return {
+                        'status': 'success',
+                        'total_cases': 0,
+                        'unique_arbitrators': 0,
+                        'unique_respondents': 0
+                    }
         
         except SQLAlchemyError as e:
             return {

@@ -120,49 +120,105 @@ def main():
             
             if uploaded_files:
                 if st.button("Process Files"):
-                    # Save uploaded files temporarily
+                    # Initialize progress tracking
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    status_text.text("Preparing files for processing...")
+                    
+                    # Initialize file paths
                     file_paths = []
-                    for file in uploaded_files:
+                    
+                    # Save uploaded files temporarily with progress indication
+                    for i, file in enumerate(uploaded_files):
+                        status_text.text(f"Saving file {i+1} of {len(uploaded_files)}...")
+                        progress_bar.progress((i / len(uploaded_files)) * 0.1)  # First 10% for file saving
+                        
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
                             tmp.write(file.getvalue())
                             file_paths.append(tmp.name)
                     
+                    # Create a function to update progress from processor
+                    def update_progress(progress_fraction, message):
+                        # Scale to use 10%-90% of the progress bar (saving and cleanup use the rest)
+                        scaled_progress = 0.1 + (progress_fraction * 0.8)
+                        progress_bar.progress(scaled_progress)
+                        status_text.text(message)
+                    
                     # Process the files
                     processor = DataProcessor()
-                    with st.spinner("Processing files..."):
-                        try:
-                            # Process files and optionally save to database
-                            combined_data, db_result = processor.process_files(file_paths, save_to_db=save_to_db)
+                    
+                    try:
+                        status_text.text("Starting file processing...")
+                        
+                        # Process files with progress updates
+                        combined_data, db_result = processor.process_files(
+                            file_paths, 
+                            save_to_db=save_to_db,
+                            progress_callback=update_progress
+                        )
+                        
+                        if combined_data is not None and not combined_data.empty:
+                            status_text.text("Calculating metrics...")
+                            progress_bar.progress(0.9)
                             
-                            if combined_data is not None and not combined_data.empty:
-                                st.session_state.data = combined_data
-                                st.session_state.filtered_data = combined_data
-                                
-                                # Calculate metrics
-                                analyzer = DataAnalyzer(combined_data)
-                                st.session_state.metrics = analyzer.calculate_metrics()
-                                
-                                # Show success message
-                                success_msg = f"Successfully processed {len(uploaded_files)} files with {len(combined_data)} records!"
-                                
-                                # If data was saved to database, add info to success message
-                                if save_to_db and db_result['status'] == 'success':
-                                    success_msg += f"\n\nData saved to database: {db_result.get('inserted', 0)} new records inserted, {db_result.get('updated', 0)} records updated."
-                                elif save_to_db and db_result['status'] == 'error':
-                                    success_msg += f"\n\nWarning: Database save failed - {db_result.get('message', 'Unknown error')}"
-                                
-                                st.success(success_msg)
-                                
-                                # Clean up temp files
-                                for file_path in file_paths:
-                                    try:
-                                        os.unlink(file_path)
-                                    except:
-                                        pass
-                            else:
-                                st.error("Failed to process files. Please check the file format.")
-                        except Exception as e:
-                            st.error(f"Error processing files: {str(e)}")
+                            st.session_state.data = combined_data
+                            st.session_state.filtered_data = combined_data
+                            
+                            # Calculate metrics
+                            analyzer = DataAnalyzer(combined_data)
+                            st.session_state.metrics = analyzer.calculate_metrics()
+                            
+                            # Show success message
+                            success_msg = f"Successfully processed {len(uploaded_files)} files with {len(combined_data)} records!"
+                            
+                            # If data was saved to database, add info to success message
+                            if save_to_db and db_result['status'] == 'success':
+                                success_msg += f"\n\nData saved to database: {db_result.get('inserted', 0)} new records inserted, {db_result.get('updated', 0)} records updated."
+                            elif save_to_db and db_result['status'] == 'error':
+                                success_msg += f"\n\nWarning: Database save failed - {db_result.get('message', 'Unknown error')}"
+                            
+                            # Clean up temp files
+                            status_text.text("Cleaning up temporary files...")
+                            progress_bar.progress(0.95)
+                            
+                            for file_path in file_paths:
+                                try:
+                                    os.unlink(file_path)
+                                except Exception as cleanup_error:
+                                    print(f"Warning: Failed to clean up temp file {file_path}: {cleanup_error}")
+                            
+                            # Complete progress
+                            progress_bar.progress(1.0)
+                            status_text.text("Processing complete!")
+                            
+                            st.success(success_msg)
+                            
+                        else:
+                            progress_bar.progress(1.0)
+                            status_text.empty()
+                            st.error("Failed to process files. Please check the file format.")
+                            
+                    except Exception as e:
+                        progress_bar.progress(1.0)
+                        status_text.empty()
+                        st.error(f"Error processing files: {str(e)}")
+                        
+                        # Provide more detailed error information for large files
+                        if any(os.path.getsize(path) > 10 * 1024 * 1024 for path in file_paths):
+                            st.warning("""
+                                One or more of your files is quite large (>10MB). 
+                                For very large files, try these approaches:
+                                1. Split the file into smaller chunks before uploading
+                                2. Pre-process the file to remove unnecessary columns
+                                3. Convert the file to CSV format which can be more efficient
+                            """)
+                        
+                        # Clean up temp files on error
+                        for file_path in file_paths:
+                            try:
+                                os.unlink(file_path)
+                            except:
+                                pass
         
         else:  # Use Sample Data
             # Option to save sample data to DB or not
