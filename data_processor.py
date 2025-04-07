@@ -41,7 +41,7 @@ class DataProcessor:
         
         # Standard column names for output
         self.standard_columns = [
-            'Case_ID', 'Case_Name', 'Arbitrator_Name', 'Respondent_Name',
+            'Case_ID', 'Arbitrator_Name', 'Respondent_Name',
             'Consumer_Attorney', 'Respondent_Attorney', 'Disposition_Type',
             'Date_Filed', 'Date_Closed', 'Award_Amount', 'Claim_Amount', 'Forum'
         ]
@@ -443,7 +443,6 @@ class DataProcessor:
         # Map each field type to a column in the original dataframe
         for field_type, standard_col in [
             ('case_id', 'Case_ID'),
-            ('case_name', 'Case_Name'),
             ('arbitrator_name', 'Arbitrator_Name'),
             ('respondent_name', 'Respondent_Name'),
             ('consumer_attorney', 'Consumer_Attorney'),
@@ -476,6 +475,17 @@ class DataProcessor:
         
         # Clean and standardize the data
         processed_df = self._clean_dataframe(processed_df)
+        
+        # Make sure Arbitrator_Name is never null - use "Unknown" as fallback
+        if 'Arbitrator_Name' in processed_df.columns:
+            processed_df['Arbitrator_Name'] = processed_df['Arbitrator_Name'].fillna('Unknown')
+        
+        # Filter out rows that don't have required fields
+        required_fields = ['Case_ID', 'Arbitrator_Name']
+        for field in required_fields:
+            if field in processed_df.columns:
+                processed_df = processed_df[processed_df[field].notna()]
+                print(f"Filtered rows without {field}, remaining rows: {len(processed_df)}")
         
         return processed_df
     
@@ -632,14 +642,14 @@ class DataProcessor:
                     # Drop less complete records
                     df = df.drop(to_drop)
         
-        # Also check for potential duplicates using case name and arbitrator
-        if 'Case_Name' in df.columns and 'Arbitrator_Name' in df.columns:
+        # Also check for potential duplicates using arbitrator and respondent
+        if 'Arbitrator_Name' in df.columns and 'Respondent_Name' in df.columns and 'Date_Filed' in df.columns:
             # Identify potential duplicates
-            potential_duplicates = df[df.duplicated(subset=['Case_Name', 'Arbitrator_Name'], keep=False)]
+            potential_duplicates = df[df.duplicated(subset=['Arbitrator_Name', 'Respondent_Name', 'Date_Filed'], keep=False)]
             
             if not potential_duplicates.empty:
                 # For each potential duplicate group, keep the most complete record
-                for _, group in potential_duplicates.groupby(['Case_Name', 'Arbitrator_Name']):
+                for _, group in potential_duplicates.groupby(['Arbitrator_Name', 'Respondent_Name', 'Date_Filed']):
                     # Count non-null values in each record
                     completeness = group.notnull().sum(axis=1)
                     
@@ -667,7 +677,7 @@ class DataProcessor:
         
         # Fill missing values with appropriate defaults
         for col in df.columns:
-            if col in ['Case_ID', 'Case_Name', 'Arbitrator_Name', 'Respondent_Name',
+            if col in ['Case_ID', 'Arbitrator_Name', 'Respondent_Name',
                       'Consumer_Attorney', 'Respondent_Attorney', 'Disposition_Type']:
                 df[col] = df[col].fillna('Unknown')
         
@@ -675,5 +685,13 @@ class DataProcessor:
         for col in self.standard_columns:
             if col not in df.columns:
                 df[col] = None
+                
+        # Make sure Arbitrator_Name is present and valid (very important field)
+        if 'Arbitrator_Name' in df.columns:
+            # Fill any remaining nulls
+            df['Arbitrator_Name'] = df['Arbitrator_Name'].fillna('Unknown')
+            # Remove any rows where Arbitrator_Name is empty or just whitespace
+            df = df[df['Arbitrator_Name'].str.strip() != '']
+            print(f"After final cleaning, rows with valid arbitrator names: {len(df)}")
         
         return df

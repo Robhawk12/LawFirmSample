@@ -73,7 +73,6 @@ def load_sample_data() -> pd.DataFrame:
     # Generate sample data
     data = {
         'Case_ID': [f"ARB-{2018+i//100}-{1000+i}" for i in range(num_records)],
-        'Case_Name': [f"{random.choice(['Consumer', 'Claimant'])} v. {random.choice(respondents)}" for _ in range(num_records)],
         'Arbitrator_Name': [random.choice(arbitrators) for _ in range(num_records)],
         'Respondent_Name': [random.choice(respondents) for _ in range(num_records)],
         'Consumer_Attorney': [random.choice(consumer_attorneys) for _ in range(num_records)],
