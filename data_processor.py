@@ -12,30 +12,30 @@ class DataProcessor:
         # Field mappings for different sources
         self.field_mappings = {
             'AAA': {
-                'case_id': ['Case ID', 'Case Number', 'Case No.', 'Case_ID'],
+                'case_id': ['Case ID', 'Case Number', 'Case No.', 'Case_ID', 'CASE_ID'],
                 'case_name': ['Case Name', 'Case_Name'],
-                'arbitrator_name': ['Arbitrator Name', 'Arbitrator', 'Arbitrator_Name'],
-                'respondent_name': ['Respondent Name', 'Respondent', 'Company', 'Business', 'Respondent_Name'],
-                'consumer_attorney': ['Consumer Attorney', 'Claimant Attorney', 'Consumer_Attorney', 'Consumer Attorney Name'],
+                'arbitrator_name': ['Arbitrator Name', 'Arbitrator', 'Arbitrator_Name', 'ARBITRATOR_NAME'],
+                'respondent_name': ['Respondent Name', 'Respondent', 'Company', 'Business', 'Respondent_Name', 'NONCONSUMER'],
+                'consumer_attorney': ['Consumer Attorney', 'Claimant Attorney', 'Consumer_Attorney', 'Consumer Attorney Name', 'NAME_CONSUMER_ATTORNEY'],
                 'respondent_attorney': ['Respondent Attorney', 'Company Attorney', 'Respondent_Attorney'],
-                'disposition_type': ['Type of Disposition', 'Disposition', 'Case Outcome', 'Disposition_Type'],
-                'date_filed': ['Date Filed', 'Filing Date', 'Date_Filed'],
-                'date_closed': ['Date Closed', 'Closing Date', 'Date_Closed'],
-                'award_amount': ['Award Amount', 'Award', 'Award_Amount'],
-                'claim_amount': ['Claim Amount', 'Demand Amount', 'Claim_Amount']
+                'disposition_type': ['Type of Disposition', 'Disposition', 'Case Outcome', 'Disposition_Type', 'TYPE_OF_DISPOSITION'],
+                'date_filed': ['Date Filed', 'Filing Date', 'Date_Filed', 'FILING_DATE'],
+                'date_closed': ['Date Closed', 'Closing Date', 'Date_Closed', 'CLOSEDATE'],
+                'award_amount': ['Award Amount', 'Award', 'Award_Amount', 'AWARD_AMT_CONSUMER'],
+                'claim_amount': ['Claim Amount', 'Demand Amount', 'Claim_Amount', 'CLAIM_AMT_CONSUMER']
             },
             'JAMS': {
-                'case_id': ['Case ID', 'Case #', 'Case Number', 'Reference Number', 'Case_ID'],
+                'case_id': ['Case ID', 'Case #', 'Case Number', 'Reference Number', 'Case_ID', 'CASE_ID'],
                 'case_name': ['Case Name', 'Case Title', 'Case_Name'],
-                'arbitrator_name': ['Arbitrator Name', 'Arbitrator', 'Neutral', 'Arbitrator_Name'],
-                'respondent_name': ['Respondent Name', 'Respondent', 'Company', 'Business', 'Respondent_Name'],
-                'consumer_attorney': ['Consumer Attorney', 'Claimant Attorney', 'Consumer_Attorney', 'Consumer Attorney Name'],
+                'arbitrator_name': ['Arbitrator Name', 'Arbitrator', 'Neutral', 'Arbitrator_Name', 'ARBITRATOR_NAME'],
+                'respondent_name': ['Respondent Name', 'Respondent', 'Company', 'Business', 'Respondent_Name', 'NONCONSUMER'],
+                'consumer_attorney': ['Consumer Attorney', 'Claimant Attorney', 'Consumer_Attorney', 'Consumer Attorney Name', 'NAME_CONSUMER_ATTORNEY'],
                 'respondent_attorney': ['Respondent Attorney', 'Company Attorney', 'Respondent_Attorney'],
-                'disposition_type': ['Type of Disposition', 'Disposition', 'Case Outcome', 'Result', 'Disposition_Type'],
-                'date_filed': ['Date Filed', 'Filing Date', 'Date_Filed', 'Date of Filing'],
-                'date_closed': ['Date Closed', 'Closing Date', 'Date_Closed', 'Date of Resolution'],
-                'award_amount': ['Award Amount', 'Award', 'Award_Amount'],
-                'claim_amount': ['Claim Amount', 'Demand Amount', 'Claim_Amount']
+                'disposition_type': ['Type of Disposition', 'Disposition', 'Case Outcome', 'Result', 'Disposition_Type', 'TYPE_OF_DISPOSITION'],
+                'date_filed': ['Date Filed', 'Filing Date', 'Date_Filed', 'Date of Filing', 'FILING_DATE'],
+                'date_closed': ['Date Closed', 'Closing Date', 'Date_Closed', 'Date of Resolution', 'CLOSEDATE'],
+                'award_amount': ['Award Amount', 'Award', 'Award_Amount', 'AWARD_AMT_CONSUMER'],
+                'claim_amount': ['Claim Amount', 'Demand Amount', 'Claim_Amount', 'CLAIM_AMT_CONSUMER']
             }
         }
         
@@ -437,6 +437,9 @@ class DataProcessor:
         # Create a new dataframe with standard columns
         processed_df = pd.DataFrame(columns=self.standard_columns)
         
+        # Debug column names - print to help troubleshoot mapping issues
+        print(f"Input columns for {source}: {df.columns.tolist()}")
+        
         # Map each field type to a column in the original dataframe
         for field_type, standard_col in [
             ('case_id', 'Case_ID'),
@@ -454,9 +457,19 @@ class DataProcessor:
             orig_col = self._map_column(df, field_type, source)
             if orig_col:
                 processed_df[standard_col] = df[orig_col]
+                print(f"Mapped {field_type} from '{orig_col}' to '{standard_col}'")
             else:
-                # If column not found, add empty column
-                processed_df[standard_col] = None
+                # Try direct column match as a last resort
+                # This handles exact column matches like 'ARBITRATOR_NAME' -> 'Arbitrator_Name'
+                for col in df.columns:
+                    if col.upper() == standard_col.upper():
+                        processed_df[standard_col] = df[col]
+                        print(f"Direct match: {col} → {standard_col}")
+                        break
+                else:
+                    # If column not found, add empty column
+                    processed_df[standard_col] = None
+                    print(f"No match found for {field_type}, setting {standard_col} to None")
         
         # Add source column
         processed_df['Forum'] = source

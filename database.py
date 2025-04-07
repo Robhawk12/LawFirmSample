@@ -169,6 +169,9 @@ class ArbitrationDatabase:
         # Create a copy to avoid modifying the original
         db_df = pd.DataFrame()
         
+        # Print input columns for debugging
+        print(f"Input columns for DB mapping: {df.columns.tolist()}")
+        
         # Map column names (case-insensitive)
         column_mapping = {
             'Case_ID': 'case_id',
@@ -193,15 +196,33 @@ class ArbitrationDatabase:
         for df_col, db_col in column_mapping.items():
             if df_col in df.columns:
                 db_df[db_col] = df[df_col]
+                print(f"Exact DB mapping: {df_col} → {db_col}")
             else:
                 # Check for case-insensitive match
                 for col in df.columns:
                     if col.lower() == df_col.lower():
                         db_df[db_col] = df[col]
+                        print(f"Case-insensitive DB mapping: {col} → {db_col}")
                         break
                 else:
+                    # Special handling for arbitrator_name to ensure it's not lost
+                    if db_col == 'arbitrator_name' and 'ARBITRATOR_NAME' in df.columns:
+                        db_df[db_col] = df['ARBITRATOR_NAME']
+                        print(f"Special mapping: ARBITRATOR_NAME → {db_col}")
                     # Column not found, set to None
-                    db_df[db_col] = None
+                    else:
+                        db_df[db_col] = None
+                        print(f"No match found for {df_col}, setting {db_col} to None")
+        
+        # Double-check critical fields
+        if 'arbitrator_name' not in db_df.columns or db_df['arbitrator_name'].isna().all():
+            print("WARNING: arbitrator_name missing or all null after mapping!")
+            # Try to recover from any column that might contain arbitrator names
+            for col in df.columns:
+                if 'arbitrator' in col.lower() or 'neutral' in col.lower():
+                    print(f"Attempting to recover arbitrator_name from {col}")
+                    db_df['arbitrator_name'] = df[col]
+                    break
         
         return db_df
     
@@ -279,6 +300,9 @@ class ArbitrationDatabase:
         # Create a copy to avoid modifying the original
         app_df = pd.DataFrame()
         
+        # Print input columns for debugging
+        print(f"DB columns before mapping to DataFrame: {df.columns.tolist()}")
+        
         # Map column names (case-sensitive for app)
         column_mapping = {
             'case_id': 'Case_ID',
@@ -303,6 +327,22 @@ class ArbitrationDatabase:
         for db_col, app_col in column_mapping.items():
             if db_col in df.columns:
                 app_df[app_col] = df[db_col]
+                print(f"Mapping DB to App: {db_col} → {app_col}")
+        
+        # Verify critical columns are present and have data
+        if 'Arbitrator_Name' not in app_df.columns or app_df['Arbitrator_Name'].isna().all():
+            print("WARNING: Arbitrator_Name column is missing or empty after DB mapping!")
+            # If arbitrator_name exists in source but wasn't mapped
+            if 'arbitrator_name' in df.columns:
+                app_df['Arbitrator_Name'] = df['arbitrator_name']
+                print("Recovered Arbitrator_Name from arbitrator_name")
+        
+        # Check for data in critical columns and report counts
+        for critical_col in ['Arbitrator_Name', 'Respondent_Name', 'Disposition_Type']:
+            if critical_col in app_df.columns:
+                non_null_count = app_df[critical_col].count()
+                total_count = len(app_df)
+                print(f"{critical_col}: {non_null_count}/{total_count} non-null values")
         
         return app_df
     
