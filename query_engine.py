@@ -234,18 +234,30 @@ def _list_arbitrator_cases(arbitrator_name: str, data: pd.DataFrame) -> str:
         # Filter for exact match
         arbitrator_data = data[data['Arbitrator_Name'] == actual_name]
         
-        # Get case names
-        if 'Case_Name' in arbitrator_data.columns:
-            case_names = arbitrator_data['Case_Name'].tolist()
+        # Get case IDs and respondent names for better identification
+        if len(arbitrator_data) > 0:
+            case_ids = arbitrator_data['Case_ID'].tolist()
             
-            # Format the response
-            if len(case_names) > 0:
-                case_list = "\n".join([f"- {name}" for name in case_names])
-                return f"Arbitrator {actual_name} has handled the following {len(case_names)} cases:\n\n{case_list}"
+            # Get respondent names if available for better context
+            if 'Respondent_Name' in arbitrator_data.columns:
+                respondents = arbitrator_data['Respondent_Name'].tolist()
+                case_info = []
+                
+                for i, case_id in enumerate(case_ids):
+                    # Add respondent info if available
+                    if i < len(respondents) and pd.notna(respondents[i]):
+                        case_info.append(f"- Case {case_id} against {respondents[i]}")
+                    else:
+                        case_info.append(f"- Case {case_id}")
+                
+                case_list = "\n".join(case_info)
+                return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
             else:
-                return f"No case names are available for Arbitrator {actual_name}."
+                # Format with just case IDs
+                case_list = "\n".join([f"- Case {case_id}" for case_id in case_ids])
+                return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
         else:
-            return f"Case name data is not available for Arbitrator {actual_name}."
+            return f"No cases are available for Arbitrator {actual_name}."
     
     # Try a partial match if exact match fails
     matching_arbitrators = data['Arbitrator_Name'].str.lower().str.contains(arbitrator_name.lower())
@@ -257,18 +269,30 @@ def _list_arbitrator_cases(arbitrator_name: str, data: pd.DataFrame) -> str:
         # Filter for the arbitrator
         arbitrator_data = data[data['Arbitrator_Name'] == actual_name]
         
-        # Get case names
-        if 'Case_Name' in arbitrator_data.columns:
-            case_names = arbitrator_data['Case_Name'].tolist()
+        # Process case data
+        if len(arbitrator_data) > 0:
+            case_ids = arbitrator_data['Case_ID'].tolist()
             
-            # Format the response
-            if len(case_names) > 0:
-                case_list = "\n".join([f"- {name}" for name in case_names])
-                return f"Arbitrator {actual_name} has handled the following {len(case_names)} cases:\n\n{case_list}"
+            # Get respondent names if available
+            if 'Respondent_Name' in arbitrator_data.columns:
+                respondents = arbitrator_data['Respondent_Name'].tolist()
+                case_info = []
+                
+                for i, case_id in enumerate(case_ids):
+                    # Add respondent info if available
+                    if i < len(respondents) and pd.notna(respondents[i]):
+                        case_info.append(f"- Case {case_id} against {respondents[i]}")
+                    else:
+                        case_info.append(f"- Case {case_id}")
+                
+                case_list = "\n".join(case_info)
+                return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
             else:
-                return f"No case names are available for Arbitrator {actual_name}."
+                # Format with just case IDs
+                case_list = "\n".join([f"- Case {case_id}" for case_id in case_ids])
+                return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
         else:
-            return f"Case name data is not available for Arbitrator {actual_name}."
+            return f"No cases are available for Arbitrator {actual_name}."
     else:
         # Try a more flexible match by splitting the name into parts
         name_parts = arbitrator_name.lower().split()
@@ -279,18 +303,30 @@ def _list_arbitrator_cases(arbitrator_name: str, data: pd.DataFrame) -> str:
                     actual_name = data.loc[flexible_match, 'Arbitrator_Name'].iloc[0]
                     arbitrator_data = data[data['Arbitrator_Name'] == actual_name]
                     
-                    # Get case names
-                    if 'Case_Name' in arbitrator_data.columns:
-                        case_names = arbitrator_data['Case_Name'].tolist()
+                    # Process case data
+                    if len(arbitrator_data) > 0:
+                        case_ids = arbitrator_data['Case_ID'].tolist()
                         
-                        # Format the response
-                        if len(case_names) > 0:
-                            case_list = "\n".join([f"- {name}" for name in case_names])
-                            return f"Arbitrator {actual_name} has handled the following {len(case_names)} cases:\n\n{case_list}"
+                        # Get respondent names if available
+                        if 'Respondent_Name' in arbitrator_data.columns:
+                            respondents = arbitrator_data['Respondent_Name'].tolist()
+                            case_info = []
+                            
+                            for i, case_id in enumerate(case_ids):
+                                # Add respondent info if available
+                                if i < len(respondents) and pd.notna(respondents[i]):
+                                    case_info.append(f"- Case {case_id} against {respondents[i]}")
+                                else:
+                                    case_info.append(f"- Case {case_id}")
+                            
+                            case_list = "\n".join(case_info)
+                            return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
                         else:
-                            return f"No case names are available for Arbitrator {actual_name}."
+                            # Format with just case IDs
+                            case_list = "\n".join([f"- Case {case_id}" for case_id in case_ids])
+                            return f"Arbitrator {actual_name} has handled the following {len(case_ids)} cases:\n\n{case_list}"
                     else:
-                        return f"Case name data is not available for Arbitrator {actual_name}."
+                        return f"No cases are available for Arbitrator {actual_name}."
         
         return f"I couldn't find any cases for an arbitrator matching '{arbitrator_name}' in the dataset."
 

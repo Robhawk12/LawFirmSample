@@ -48,8 +48,10 @@ def create_visualizations(data: pd.DataFrame) -> None:
         
         # Verify Arbitrator_Name column has data before proceeding
         if 'Arbitrator_Name' in data.columns:
-            # Filter out null values
+            # Filter out null values and "Unknown"
             arbitrator_data = data.dropna(subset=['Arbitrator_Name'])
+            # Filter out "Unknown" and "None" values
+            arbitrator_data = arbitrator_data[~arbitrator_data['Arbitrator_Name'].isin(['Unknown', 'None'])]
             
             # Print counts for debugging
             print(f"Total rows: {len(data)}, Rows with arbitrator names: {len(arbitrator_data)}")
@@ -89,7 +91,9 @@ def create_visualizations(data: pd.DataFrame) -> None:
     with col2:
         # Case count by Respondent (Top 10)
         st.subheader("Case Count by Respondent (Company)")
-        respondent_counts = data['Respondent_Name'].value_counts().reset_index()
+        # Filter out "Unknown" and "None" respondent names
+        filtered_data = data[~data['Respondent_Name'].isin(['Unknown', 'None'])]
+        respondent_counts = filtered_data['Respondent_Name'].value_counts().reset_index()
         respondent_counts.columns = ['Respondent_Name', 'Count']
         respondent_counts = respondent_counts.sort_values('Count', ascending=False).head(10)
         
@@ -128,7 +132,9 @@ def create_visualizations(data: pd.DataFrame) -> None:
     with col4:
         # Case count by Consumer Attorney (Top 10)
         st.subheader("Case Count by Consumer Attorney")
-        attorney_counts = data['Consumer_Attorney'].value_counts().reset_index()
+        # Filter out "Unknown" and "None" attorney names
+        filtered_data = data[~data['Consumer_Attorney'].isin(['Unknown', 'None'])]
+        attorney_counts = filtered_data['Consumer_Attorney'].value_counts().reset_index()
         attorney_counts.columns = ['Consumer_Attorney', 'Count']
         attorney_counts = attorney_counts.sort_values('Count', ascending=False).head(10)
         
@@ -372,7 +378,9 @@ def create_respondent_visualization(data: pd.DataFrame, respondent_name: str) ->
     with col2:
         # Arbitrators for this respondent
         st.subheader("Top Arbitrators")
-        arb_counts = respondent_data['Arbitrator_Name'].value_counts().reset_index()
+        # Filter out "Unknown" and "None" arbitrator names
+        filtered_data = respondent_data[~respondent_data['Arbitrator_Name'].isin(['Unknown', 'None'])]
+        arb_counts = filtered_data['Arbitrator_Name'].value_counts().reset_index()
         arb_counts.columns = ['Arbitrator_Name', 'Count']
         arb_counts = arb_counts.head(10)
         
