@@ -15,27 +15,76 @@ def create_visualizations(data: pd.DataFrame) -> None:
         st.warning("No data available for visualization.")
         return
     
+    # Print data shape and columns for debugging
+    print(f"Visualization data shape: {data.shape}")
+    print(f"Visualization data columns: {data.columns.tolist()}")
+    
+    # Ensure Arbitrator_Name exists (case-sensitive recovery)
+    if 'Arbitrator_Name' not in data.columns:
+        print("WARNING: Arbitrator_Name column not found, attempting recovery...")
+        
+        # Try to find any column that might contain arbitrator data
+        for col in data.columns:
+            if 'arbitrator' in col.lower() or 'neutral' in col.lower():
+                print(f"Found potential arbitrator column: {col}")
+                data['Arbitrator_Name'] = data[col]
+                break
+    
+    # Debug information - check data columns and arbitrator names
+    st.sidebar.expander("Debug Info", expanded=False).write({
+        'Data columns': data.columns.tolist(),
+        'Arbitrator_Name column exists': 'Arbitrator_Name' in data.columns,
+        'Arbitrator_Name non-null count': data['Arbitrator_Name'].count() if 'Arbitrator_Name' in data.columns else 0,
+        'Total rows': len(data),
+        'Sample arbitrators': data['Arbitrator_Name'].dropna().tolist()[:5] if 'Arbitrator_Name' in data.columns else []
+    })
+    
     # Create two columns for charts
     col1, col2 = st.columns(2)
     
     with col1:
         # Case count by Arbitrator (Top 10)
         st.subheader("Case Count by Arbitrator")
-        arbitrator_counts = data['Arbitrator_Name'].value_counts().reset_index()
-        arbitrator_counts.columns = ['Arbitrator_Name', 'Count']
-        arbitrator_counts = arbitrator_counts.sort_values('Count', ascending=False).head(10)
         
-        fig = px.bar(
-            arbitrator_counts,
-            x='Count',
-            y='Arbitrator_Name',
-            orientation='h',
-            color='Count',
-            color_continuous_scale='Blues',
-            labels={'Count': 'Number of Cases', 'Arbitrator_Name': 'Arbitrator'}
-        )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        # Verify Arbitrator_Name column has data before proceeding
+        if 'Arbitrator_Name' in data.columns:
+            # Filter out null values
+            arbitrator_data = data.dropna(subset=['Arbitrator_Name'])
+            
+            # Print counts for debugging
+            print(f"Total rows: {len(data)}, Rows with arbitrator names: {len(arbitrator_data)}")
+            
+            if not arbitrator_data.empty:
+                # Get counts
+                arbitrator_counts = arbitrator_data['Arbitrator_Name'].value_counts().reset_index()
+                arbitrator_counts.columns = ['Arbitrator_Name', 'Count']
+                arbitrator_counts = arbitrator_counts.sort_values('Count', ascending=False).head(10)
+                
+                # Print top arbitrators for debugging
+                print(f"Top arbitrators: {arbitrator_counts['Arbitrator_Name'].tolist()}")
+                
+                # Show count details for debugging
+                with st.expander("Arbitrator Counts", expanded=False):
+                    st.write(arbitrator_counts)
+                
+                # Create the visualization
+                fig = px.bar(
+                    arbitrator_counts,
+                    x='Count',
+                    y='Arbitrator_Name',
+                    orientation='h',
+                    color='Count',
+                    color_continuous_scale='Blues',
+                    labels={'Count': 'Number of Cases', 'Arbitrator_Name': 'Arbitrator'}
+                )
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No non-null arbitrator names found in the data.")
+                print("WARNING: Arbitrator data was empty after dropping NAs")
+        else:
+            st.info("No arbitrator data available for visualization.")
+            print("ERROR: Arbitrator_Name column not found in visualization data")
     
     with col2:
         # Case count by Respondent (Top 10)
