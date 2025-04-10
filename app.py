@@ -179,13 +179,13 @@ def main():
         load_sample_data_to_state()
     else:
         # Tab-based interface
-        tab1, tab2, tab3 = st.tabs(["Dashboard", "Data Explorer", "AI Query"])
+        tab1, tab2 = st.tabs(["Dashboard", "Charts & Graphs"])
         
         with tab1:
-            # Dashboard tab with visualizations
+            # Dashboard tab with key metrics, AI query, and data explorer
             
             # Key metrics cards
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.metric(
@@ -201,21 +201,37 @@ def main():
             
             with col3:
                 st.metric(
-                    "Avg Claim Amount",
-                    f"${st.session_state.metrics.get('avg_claim_amount', 0):,.2f}"
-                )
-            
-            with col4:
-                st.metric(
                     "Avg Consumer Claimant",
                     f"${st.session_state.metrics.get('avg_consumer_claimant', 0):,.2f}"
                 )
             
-            # Create visualizations
-            create_visualizations(st.session_state.filtered_data)
-        
-        with tab2:
-            # Data Explorer tab with filterable table
+            # AI Query section
+            st.header("AI-Powered Query Interface")
+            st.info("This feature allows you to ask natural language questions about the arbitration data.")
+            
+            query = st.text_area("Enter your query:", height=100, placeholder="Example: How many arbitrations has Arbitrator John Smith had?")
+            
+            if st.button("Process Query"):
+                if query:
+                    with st.spinner("Processing your query..."):
+                        # Process the natural language query
+                        response = process_natural_language_query(query, st.session_state.filtered_data)
+                        st.markdown("### Response")
+                        st.markdown(response)
+                else:
+                    st.warning("Please enter a query.")
+            
+            # Sample queries
+            st.markdown("### Sample Queries")
+            st.markdown("""
+            - How many arbitrations has Arbitrator John L. Smith had?
+            - How many times has Arbitrator Jane D. Brown ruled for the complainant?
+            - What was the average award given by Arbitrator Robert T. Williams?
+            - List the names of all arbitrations handled by Arbitrator Maria A. Johnson.
+            - How many times has Arbitrator David M. Taylor ruled for the consumer against AT&T?
+            """)
+            
+            # Data Explorer section
             st.header("Data Explorer")
             
             # Allow searching in the data table
@@ -267,32 +283,12 @@ def main():
                 else:
                     st.warning("No rows selected for export.")
         
-        with tab3:
-            # AI Query tab
-            st.header("AI-Powered Query Interface")
-            st.info("This feature allows you to ask natural language questions about the arbitration data.")
+        with tab2:
+            # Charts & Graphs tab with visualizations
+            st.header("Charts & Graphs")
             
-            query = st.text_area("Enter your query:", height=100, placeholder="Example: How many arbitrations has Arbitrator John Smith had?")
-            
-            if st.button("Process Query"):
-                if query:
-                    with st.spinner("Processing your query..."):
-                        # Process the natural language query
-                        response = process_natural_language_query(query, st.session_state.filtered_data)
-                        st.markdown("### Response")
-                        st.markdown(response)
-                else:
-                    st.warning("Please enter a query.")
-            
-            # Sample queries
-            st.markdown("### Sample Queries")
-            st.markdown("""
-            - How many arbitrations has Arbitrator John L. Smith had?
-            - How many times has Arbitrator Jane D. Brown ruled for the complainant?
-            - What was the average award given by Arbitrator Robert T. Williams?
-            - List the names of all arbitrations handled by Arbitrator Maria A. Johnson.
-            - How many times has Arbitrator David M. Taylor ruled for the consumer against AT&T?
-            """)
+            # Create visualizations
+            create_visualizations(st.session_state.filtered_data)
 
 def load_sample_data_to_state():
     """Helper function to load sample data into session state"""
