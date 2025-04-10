@@ -35,56 +35,8 @@ def main():
     # Header with navigation
     st.title("⚖️ Arbitration Data Dashboard")
     
-    # Sidebar for data loading and filtering
+    # Sidebar for filtering
     with st.sidebar:
-        st.header("Data Management")
-        
-        # Database information expander
-        db_stat_expander = st.expander("Database Information")
-        
-        # Display database status
-        with db_stat_expander:
-            try:
-                db = ArbitrationDatabase()
-                if db.table_exists():
-                    db_stats = db.get_stats()
-                    if db_stats['status'] == 'success':
-                        st.info(f"Database Status: Connected\n\n"
-                              f"Total Cases: {db_stats.get('total_cases', 0)}\n\n"
-                              f"Unique Arbitrators: {db_stats.get('unique_arbitrators', 0)}\n\n"
-                              f"Unique Respondents: {db_stats.get('unique_respondents', 0)}")
-                    else:
-                        st.warning(f"Database Status: Error - {db_stats.get('message', 'Unknown error')}")
-                else:
-                    st.info("Database Status: Connected (No tables yet)")
-            except Exception as e:
-                st.error(f"Database Error: {str(e)}")
-        
-        # Option to load from database
-        if st.button("Load Data from Database"):
-            with st.spinner("Loading data from database..."):
-                try:
-                    processor = DataProcessor()
-                    db_data = processor.load_from_database()
-                    
-                    if not db_data.empty:
-                        st.session_state.data = db_data
-                        st.session_state.filtered_data = db_data
-                        
-                        # Calculate metrics
-                        analyzer = DataAnalyzer(db_data)
-                        st.session_state.metrics = analyzer.calculate_metrics()
-                        
-                        st.success(f"Successfully loaded {len(db_data)} records from database!")
-                    else:
-                        st.warning("No data found in database. Loading sample data instead.")
-                        # Load sample data as fallback
-                        load_sample_data_to_state()
-                except Exception as e:
-                    st.error(f"Error loading from database: {str(e)}. Loading sample data instead.")
-                    # Load sample data as fallback
-                    load_sample_data_to_state()
-        
         # Automatically load sample data if no data is loaded
         if st.session_state.data is None:
             load_sample_data_to_state()
