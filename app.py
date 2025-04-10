@@ -28,10 +28,6 @@ if 'filtered_data' not in st.session_state:
     st.session_state.filtered_data = None
 if 'metrics' not in st.session_state:
     st.session_state.metrics = {}
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = True  # Prevent automatic loading of sample data
-if 'previous_source' not in st.session_state:
-    st.session_state.previous_source = "Use Sample Data"  # Track the previous data source
 
 def main():
     """Main function to run the Streamlit app."""
@@ -43,267 +39,55 @@ def main():
     with st.sidebar:
         st.header("Data Management")
         
-        # Data source options
-        # Create a key for the radio button to track changes
-        data_source = st.radio(
-            "Data Source",
-            ["Upload Excel Files", "Use Sample Data"],
-            index=1,  # Default to sample data
-            key="data_source_radio"
-        )
+        # Database information expander
+        db_stat_expander = st.expander("Database Information")
         
-        # Check if data source has changed
-        if st.session_state.previous_source != data_source:
-            # If switching to Upload Excel Files, clear any existing data
-            if data_source == "Upload Excel Files" and st.session_state.data is not None:
-                st.session_state.data = None
-                st.session_state.filtered_data = None
-                st.session_state.metrics = {}
-            
-            # Update previous source
-            st.session_state.previous_source = data_source
-        
-        if data_source == "Upload Excel Files":
-            uploaded_files = st.file_uploader(
-                "Upload Excel Files (.xlsx, .xls)",
-                type=["xlsx", "xls"],
-                accept_multiple_files=True
-            )
-            
-            # Add database-related options
-            save_to_db = st.checkbox("Save to Database", value=True, help="Save processed data to the PostgreSQL database")
-            db_stat_expander = st.expander("Database Information")
-            
-            # Display database status
-            with db_stat_expander:
-                try:
-                    db = ArbitrationDatabase()
-                    if db.table_exists():
-                        db_stats = db.get_stats()
-                        if db_stats['status'] == 'success':
-                            st.info(f"Database Status: Connected\n\n"
-                                  f"Total Cases: {db_stats.get('total_cases', 0)}\n\n"
-                                  f"Unique Arbitrators: {db_stats.get('unique_arbitrators', 0)}\n\n"
-                                  f"Unique Respondents: {db_stats.get('unique_respondents', 0)}")
-                        else:
-                            st.warning(f"Database Status: Error - {db_stats.get('message', 'Unknown error')}")
+        # Display database status
+        with db_stat_expander:
+            try:
+                db = ArbitrationDatabase()
+                if db.table_exists():
+                    db_stats = db.get_stats()
+                    if db_stats['status'] == 'success':
+                        st.info(f"Database Status: Connected\n\n"
+                              f"Total Cases: {db_stats.get('total_cases', 0)}\n\n"
+                              f"Unique Arbitrators: {db_stats.get('unique_arbitrators', 0)}\n\n"
+                              f"Unique Respondents: {db_stats.get('unique_respondents', 0)}")
                     else:
-                        st.info("Database Status: Connected (No tables yet)")
-                except Exception as e:
-                    st.error(f"Database Error: {str(e)}")
-            
-            # Option to load from database
-            load_from_db = st.checkbox("Load Existing Data from Database", 
-                                     value=False,
-                                     help="Load previously saved data from the database")
-            
-            if load_from_db:
-                if st.button("Load from Database"):
-                    with st.spinner("Loading data from database..."):
-                        try:
-                            processor = DataProcessor()
-                            db_data = processor.load_from_database()
-                            
-                            if not db_data.empty:
-                                st.session_state.data = db_data
-                                st.session_state.filtered_data = db_data
-                                
-                                # Calculate metrics
-                                analyzer = DataAnalyzer(db_data)
-                                st.session_state.metrics = analyzer.calculate_metrics()
-                                
-                                st.success(f"Successfully loaded {len(db_data)} records from database!")
-                            else:
-                                st.warning("No data found in the database.")
-                        except Exception as e:
-                            st.error(f"Error loading from database: {str(e)}")
-            
-            if uploaded_files:
-                if st.button("Process Files"):
-                    # Initialize progress tracking
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    status_text.text("Preparing files for processing...")
-                    
-                    # Initialize file paths
-                    file_paths = []
-                    
-                    # Save uploaded files temporarily with progress indication
-                    for i, file in enumerate(uploaded_files):
-                        status_text.text(f"Saving file {i+1} of {len(uploaded_files)}...")
-                        progress_bar.progress((i / len(uploaded_files)) * 0.1)  # First 10% for file saving
-                        
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-                            tmp.write(file.getvalue())
-                            file_paths.append(tmp.name)
-                    
-                    # Create a function to update progress from processor
-                    def update_progress(progress_fraction, message):
-                        # Scale to use 10%-90% of the progress bar (saving and cleanup use the rest)
-                        scaled_progress = 0.1 + (progress_fraction * 0.8)
-                        progress_bar.progress(scaled_progress)
-                        status_text.text(message)
-                    
-                    # Process the files
+                        st.warning(f"Database Status: Error - {db_stats.get('message', 'Unknown error')}")
+                else:
+                    st.info("Database Status: Connected (No tables yet)")
+            except Exception as e:
+                st.error(f"Database Error: {str(e)}")
+        
+        # Option to load from database
+        if st.button("Load Data from Database"):
+            with st.spinner("Loading data from database..."):
+                try:
                     processor = DataProcessor()
+                    db_data = processor.load_from_database()
                     
-                    try:
-                        status_text.text("Starting file processing...")
+                    if not db_data.empty:
+                        st.session_state.data = db_data
+                        st.session_state.filtered_data = db_data
                         
-                        # Process files with progress updates
-                        combined_data, db_result = processor.process_files(
-                            file_paths, 
-                            save_to_db=save_to_db,
-                            progress_callback=update_progress
-                        )
+                        # Calculate metrics
+                        analyzer = DataAnalyzer(db_data)
+                        st.session_state.metrics = analyzer.calculate_metrics()
                         
-                        if combined_data is not None and not combined_data.empty:
-                            status_text.text("Calculating metrics...")
-                            progress_bar.progress(0.9)
-                            
-                            st.session_state.data = combined_data
-                            st.session_state.filtered_data = combined_data
-                            
-                            # Calculate metrics
-                            analyzer = DataAnalyzer(combined_data)
-                            st.session_state.metrics = analyzer.calculate_metrics()
-                            
-                            # Show success message
-                            success_msg = f"Successfully processed {len(uploaded_files)} files with {len(combined_data)} records!"
-                            
-                            # If data was saved to database, add info to success message
-                            if save_to_db and db_result['status'] == 'success':
-                                success_msg += f"\n\nData saved to database: {db_result.get('inserted', 0)} new records inserted, {db_result.get('updated', 0)} records updated."
-                            elif save_to_db and db_result['status'] == 'error':
-                                success_msg += f"\n\nWarning: Database save failed - {db_result.get('message', 'Unknown error')}"
-                            
-                            # Clean up temp files
-                            status_text.text("Cleaning up temporary files...")
-                            progress_bar.progress(0.95)
-                            
-                            for file_path in file_paths:
-                                try:
-                                    os.unlink(file_path)
-                                except Exception as cleanup_error:
-                                    print(f"Warning: Failed to clean up temp file {file_path}: {cleanup_error}")
-                            
-                            # Complete progress
-                            progress_bar.progress(1.0)
-                            status_text.text("Processing complete!")
-                            
-                            st.success(success_msg)
-                            
-                        else:
-                            progress_bar.progress(1.0)
-                            status_text.empty()
-                            st.error("Failed to process files. Please check the file format.")
-                            
-                    except Exception as e:
-                        progress_bar.progress(1.0)
-                        status_text.empty()
-                        st.error(f"Error processing files: {str(e)}")
-                        
-                        # Provide more detailed error information for large files
-                        if any(os.path.getsize(path) > 10 * 1024 * 1024 for path in file_paths):
-                            st.warning("""
-                                One or more of your files is quite large (>10MB). 
-                                For very large files, try these approaches:
-                                1. Split the file into smaller chunks before uploading
-                                2. Pre-process the file to remove unnecessary columns
-                                3. Convert the file to CSV format which can be more efficient
-                            """)
-                        
-                        # Clean up temp files on error
-                        for file_path in file_paths:
-                            try:
-                                os.unlink(file_path)
-                            except:
-                                pass
-        
-        else:  # Use Sample Data
-            # Option to save sample data to DB or not
-            save_sample_to_db = st.checkbox("Save Sample Data to Database", 
-                                         value=False, 
-                                         help="Whether to save sample data to the database when loading")
-            
-            # Option to load from database
-            load_from_db = st.checkbox("Load Existing Data from Database", 
-                                     value=False,
-                                     help="Load previously saved data from the database")
-            
-            if load_from_db:
-                if st.button("Load from Database"):
-                    with st.spinner("Loading data from database..."):
-                        try:
-                            processor = DataProcessor()
-                            db_data = processor.load_from_database()
-                            
-                            if not db_data.empty:
-                                st.session_state.data = db_data
-                                st.session_state.filtered_data = db_data
-                                
-                                # Calculate metrics
-                                analyzer = DataAnalyzer(db_data)
-                                st.session_state.metrics = analyzer.calculate_metrics()
-                                
-                                st.success(f"Successfully loaded {len(db_data)} records from database!")
-                            else:
-                                st.warning("No data found in the database.")
-                        except Exception as e:
-                            st.error(f"Error loading from database: {str(e)}")
-            
-            # Show database status expander
-            db_stat_expander = st.expander("Database Information")
-            with db_stat_expander:
-                try:
-                    db = ArbitrationDatabase()
-                    if db.table_exists():
-                        db_stats = db.get_stats()
-                        if db_stats['status'] == 'success':
-                            st.info(f"Database Status: Connected\n\n"
-                                  f"Total Cases: {db_stats.get('total_cases', 0)}\n\n"
-                                  f"Unique Arbitrators: {db_stats.get('unique_arbitrators', 0)}\n\n"
-                                  f"Unique Respondents: {db_stats.get('unique_respondents', 0)}")
-                        else:
-                            st.warning(f"Database Status: Error - {db_stats.get('message', 'Unknown error')}")
+                        st.success(f"Successfully loaded {len(db_data)} records from database!")
                     else:
-                        st.info("Database Status: Connected (No tables yet)")
+                        st.warning("No data found in database. Loading sample data instead.")
+                        # Load sample data as fallback
+                        load_sample_data_to_state()
                 except Exception as e:
-                    st.error(f"Database Error: {str(e)}")
-            
-            if st.button("Load Sample Data"):
-                with st.spinner("Loading sample data..."):
-                    # Load sample data
-                    sample_data = load_sample_data()
-                    st.session_state.data = sample_data
-                    st.session_state.filtered_data = sample_data
-                    
-                    # Calculate metrics
-                    analyzer = DataAnalyzer(sample_data)
-                    st.session_state.metrics = analyzer.calculate_metrics()
-                    
-                    # Inform user that sample data was loaded successfully
-                    st.success("Sample data loaded successfully!")
-                    
-                    # Save to database if requested
-                    if save_sample_to_db:
-                        with st.spinner("Saving sample data to database..."):
-                            try:
-                                # Create a database instance
-                                db = ArbitrationDatabase()
-                                
-                                # Convert the sample data to database format and save
-                                db_data = db._map_dataframe_to_db(sample_data)
-                                db_result = db.save_data(db_data)
-                                
-                                # Show success or error message
-                                if db_result['status'] == 'success':
-                                    st.success(f"Successfully saved sample data to database! " +
-                                              f"({db_result['inserted']} inserted, {db_result['updated']} updated)")
-                                else:
-                                    st.error(f"Error saving to database: {db_result.get('message', 'Unknown error')}")
-                            except Exception as e:
-                                st.error(f"Error saving to database: {str(e)}")
+                    st.error(f"Error loading from database: {str(e)}. Loading sample data instead.")
+                    # Load sample data as fallback
+                    load_sample_data_to_state()
+        
+        # Automatically load sample data if no data is loaded
+        if st.session_state.data is None:
+            load_sample_data_to_state()
         
         # Only show filters if data is loaded
         if st.session_state.data is not None:
@@ -311,27 +95,70 @@ def main():
             
             # Date range filter (if dates are available)
             if 'Date_Filed' in st.session_state.data.columns:
-                min_date = st.session_state.data['Date_Filed'].min()
-                max_date = st.session_state.data['Date_Filed'].max()
+                import datetime
                 
-                # Handle NaT (Not a Timestamp) values
-                if pd.isna(min_date) or pd.isna(max_date):
-                    # Use default date range if min or max is NaT
-                    import datetime
+                # Clean date column first - drop NaN and convert to datetime
+                date_series = st.session_state.data['Date_Filed'].dropna()
+                
+                # Skip if the column is empty after dropping NaN
+                if len(date_series) > 0:
+                    try:
+                        # Try to find min and max dates - handle mixed types
+                        valid_dates = []
+                        for d in date_series:
+                            try:
+                                # Convert various date formats to datetime.date
+                                if isinstance(d, datetime.date):
+                                    valid_dates.append(d)
+                                elif isinstance(d, datetime.datetime):
+                                    valid_dates.append(d.date())
+                                elif isinstance(d, str):
+                                    try:
+                                        parsed_date = pd.to_datetime(d).date()
+                                        valid_dates.append(parsed_date)
+                                    except:
+                                        pass  # Skip unparseable strings
+                            except:
+                                pass  # Skip any problematic values
+                        
+                        # Use the min and max of valid dates if available
+                        if valid_dates:
+                            min_date = min(valid_dates)
+                            max_date = max(valid_dates)
+                            
+                            date_range = st.date_input(
+                                "Date Range",
+                                [min_date, max_date],
+                                min_value=min_date,
+                                max_value=max_date
+                            )
+                        else:
+                            # Fallback to default range if no valid dates found
+                            today = datetime.date.today()
+                            default_start = today - datetime.timedelta(days=365)  # 1 year ago
+                            default_end = today
+                            date_range = st.date_input(
+                                "Date Range",
+                                [default_start, default_end]
+                            )
+                    except Exception as e:
+                        # Log the error and use default date range as fallback
+                        print(f"Error processing dates: {e}")
+                        today = datetime.date.today()
+                        default_start = today - datetime.timedelta(days=365)  # 1 year ago
+                        default_end = today
+                        date_range = st.date_input(
+                            "Date Range",
+                            [default_start, default_end]
+                        )
+                else:
+                    # No dates available, use default range
                     today = datetime.date.today()
                     default_start = today - datetime.timedelta(days=365)  # 1 year ago
                     default_end = today
                     date_range = st.date_input(
                         "Date Range",
                         [default_start, default_end]
-                    )
-                else:
-                    # Convert Timestamp to date for date_input
-                    date_range = st.date_input(
-                        "Date Range",
-                        [min_date.date(), max_date.date()],
-                        min_value=min_date.date(),
-                        max_value=max_date.date()
                     )
             
             # Helper function to safely sort options with None values and mixed types
@@ -396,7 +223,8 @@ def main():
     
     # Main content area
     if st.session_state.data is None:
-        st.info("Please upload Excel files or load sample data to get started.")
+        st.info("Loading sample data...")
+        load_sample_data_to_state()
     else:
         # Tab-based interface
         tab1, tab2, tab3 = st.tabs(["Dashboard", "Data Explorer", "AI Query"])
@@ -489,7 +317,7 @@ def main():
                     st.warning("No rows selected for export.")
         
         with tab3:
-            # AI Query tab (Phase 2)
+            # AI Query tab
             st.header("AI-Powered Query Interface")
             st.info("This feature allows you to ask natural language questions about the arbitration data.")
             
@@ -514,6 +342,20 @@ def main():
             - List the names of all arbitrations handled by Arbitrator Maria A. Johnson.
             - How many times has Arbitrator David M. Taylor ruled for the consumer against AT&T?
             """)
+
+def load_sample_data_to_state():
+    """Helper function to load sample data into session state"""
+    with st.spinner("Loading sample data..."):
+        # Load sample data
+        sample_data = load_sample_data()
+        
+        # Store in session state
+        st.session_state.data = sample_data
+        st.session_state.filtered_data = sample_data
+        
+        # Calculate metrics
+        analyzer = DataAnalyzer(sample_data)
+        st.session_state.metrics = analyzer.calculate_metrics()
 
 if __name__ == "__main__":
     main()
