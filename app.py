@@ -33,7 +33,7 @@ def main():
     """Main function to run the Streamlit app."""
     
     # Header with navigation
-    st.title("⚖️ Arbitration Data Dashboard")
+    st.title("⚖️ Law Firm Data Dashboard")
     
     # Sidebar for filtering
     with st.sidebar:
@@ -183,7 +183,6 @@ def main():
         
         with tab1:
             # Dashboard tab with visualizations
-            st.header("Arbitration Dashboard")
             
             # Key metrics cards
             col1, col2, col3, col4 = st.columns(4)

@@ -30,14 +30,15 @@ def create_visualizations(data: pd.DataFrame) -> None:
                 data['Arbitrator_Name'] = data[col]
                 break
     
-    # Debug information - check data columns and arbitrator names
-    st.sidebar.expander("Debug Info", expanded=False).write({
+    # Debug information in console only
+    debug_info = {
         'Data columns': data.columns.tolist(),
         'Arbitrator_Name column exists': 'Arbitrator_Name' in data.columns,
         'Arbitrator_Name non-null count': data['Arbitrator_Name'].count() if 'Arbitrator_Name' in data.columns else 0,
-        'Total rows': len(data),
-        'Sample arbitrators': data['Arbitrator_Name'].dropna().tolist()[:5] if 'Arbitrator_Name' in data.columns else []
-    })
+        'Total rows': len(data)
+    }
+    # Print to console instead of showing in UI
+    print(f"Debug info: {debug_info}")
     
     # Create two columns for charts
     col1, col2 = st.columns(2)
@@ -64,10 +65,6 @@ def create_visualizations(data: pd.DataFrame) -> None:
                 
                 # Print top arbitrators for debugging
                 print(f"Top arbitrators: {arbitrator_counts['Arbitrator_Name'].tolist()}")
-                
-                # Show count details for debugging
-                with st.expander("Arbitrator Counts", expanded=False):
-                    st.write(arbitrator_counts)
                 
                 # Create the visualization
                 fig = px.bar(
