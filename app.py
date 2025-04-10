@@ -196,13 +196,13 @@ def main():
             with col2:
                 st.metric(
                     "Total Claim Amount",
-                    f"${st.session_state.metrics.get('total_claim_amount', 0):,.2f}"
+                    f"${st.session_state.metrics.get('total_claim_amount', 0):,.0f}"
                 )
             
             with col3:
                 st.metric(
                     "Avg Consumer Claimant",
-                    f"${st.session_state.metrics.get('avg_consumer_claimant', 0):,.2f}"
+                    f"${st.session_state.metrics.get('avg_consumer_claimant', 0):,.0f}"
                 )
             
             # AI Query section
